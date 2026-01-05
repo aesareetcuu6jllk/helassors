@@ -1,16 +1,13 @@
 import __main__ as main_module
 import re
-import asyncio
 from telethon import events, Button
 
 # ربط المحركات
 hellas = main_module.hellas
 tg_bot = main_module.tg_bot
 
-# واجهة فخمة وشفافة
-HEADER = "⚡ **𝐇𝐄𝐋𝐋𝐀𝐒 𝐒𝐔𝐏𝐄𝐑 𝐂𝐀𝐋𝐂** ⚡"
-# تصميم الشاشة ليكون أخف وأسرع في المعالجة
-DISPLAY_FORMAT = "```\n❱ {} \n```"
+# واجهة نظيفة جداً (فقط الشاشة)
+DISPLAY_FORMAT = "```\n {} \n```"
 
 @hellas.on(events.NewMessage(outgoing=True, pattern=r"^\.حاسبة$"))
 async def start_calc(event):
@@ -23,55 +20,63 @@ async def start_calc(event):
 async def inline_calc(event):
     builder = event.builder
     result = builder.article(
-        title="الآلة الحاسبة الخارقة",
-        text=f"{HEADER}\n{DISPLAY_FORMAT.format('0')}",
+        title="الآلة الحاسبة السريعة",
+        text=DISPLAY_FORMAT.format('0'),
         buttons=create_pro_buttons("0")
     )
-    # إرسال الرد بدون كاش لتسريع الاستجابة
     await event.answer([result], cache_time=0)
 
 @tg_bot.on(events.CallbackQuery(data=re.compile(b"cal_btn:(.*)")))
 async def handle_calc_press(event):
     action = event.data_match.group(1).decode()
     
-    # استخراج سريع للنص الحالي
+    # استخراج النص الحالي من داخل الصندوق البرمجي
     try:
-        # البحث عن النص بعد علامة ❱ مباشرة
-        current_display = re.search(r"❱ (.*) \n", event.original_update.msg.message).group(1).strip()
+        current_display = re.search(r"\n (.*) \n", event.original_update.msg.message).group(1).strip()
     except:
         current_display = "0"
 
-    # منطق المعالجة السريع
     if action == "AC":
         new_display = "0"
     elif action == "DEL":
         new_display = current_display[:-1] if len(current_display) > 1 else "0"
     elif action == "equal":
-        try:
-            expr = current_display.replace("×", "*").replace("÷", "/").replace("^", "**")
-            res = eval(expr)
-            new_display = f"{res:g}" # تنسيق ذكي للأرقام يزيل الأصفار الزائدة
-        except:
-            new_display = "Error"
-    else:
-        if current_display in ["0", "Error"]:
-            new_display = action if action not in "+×÷^%" else "0"
+        # إذا كانت النتيجة ظاهرة مسبقاً لا نفعل شيئاً
+        if "=" in current_display:
+            new_display = current_display
         else:
-            new_display = current_display + action
+            try:
+                # تحويل الرموز وحساب النتيجة
+                expr = current_display.replace("×", "*").replace("÷", "/").replace("^", "**")
+                res = eval(expr)
+                formatted_res = f"{res:g}"
+                # عرض العملية كاملة مع النتيجة مثل: 5+5=10
+                new_display = f"{current_display}={formatted_res}"
+            except:
+                new_display = "Error"
+    else:
+        # إذا كانت الشاشة تظهر نتيجة سابقة وبدأت تكتب رقم جديد، نصفر الشاشة
+        if "=" in current_display or current_display == "Error":
+            if action in "+-×÷^%": # إذا ضغطت عملية، يكمل على النتيجة السابقة
+                new_display = current_display.split("=")[-1] + action
+            else: # إذا ضغطت رقم، يبدأ من جديد
+                new_display = action
+        else:
+            if current_display == "0":
+                new_display = action if action not in "+×÷^%" else "0"
+            else:
+                new_display = current_display + action
 
-    # التحديث اللحظي "الطلقة"
+    # التحديث الفوري
     if new_display != current_display:
-        # استخدام التعديل المباشر بدون انتظار طويل
         await event.edit(
-            f"{HEADER}\n{DISPLAY_FORMAT.format(new_display)}",
+            DISPLAY_FORMAT.format(new_display),
             buttons=create_pro_buttons(new_display)
         )
     
-    # أهم سطر للسرعة: إغلاق حالة التحميل فوراً
     await event.answer()
 
 def create_pro_buttons(display):
-    """توزيع أزرار انسيابي وسريع"""
     return [
         [Button.inline("AC", data="cal_btn:AC"), Button.inline("⌫", data="cal_btn:DEL"), Button.inline("^", data="cal_btn:^"), Button.inline("÷", data="cal_btn:÷")],
         [Button.inline("7", data="cal_btn:7"), Button.inline("8", data="cal_btn:8"), Button.inline("9", data="cal_btn:9"), Button.inline("×", data="cal_btn:×")],
