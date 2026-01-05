@@ -29,7 +29,7 @@ async def impersonate(event):
     else:
         return await hel_edit(event, "**⚠️ يجب الرد على رسالة الشخص أولاً!**")
 
-    if user.id == 29827519: # حماية المطور (ايديك)
+    if user.id == 1490479382: # حماية المطور (ايديك)
         return await hel_edit(event, "**❌ لا تحاول تنتحل المطور!**")
 
     await event.edit("**🔄 جاري عملية الانتحال...**")
