@@ -1,39 +1,48 @@
 import __main__ as main_module
 import requests
+import urllib.parse
 from telethon import events
 
-# ربط المحرك من الملف الرئيسي
+# ربط المحرك
 hellas = main_module.hellas
 
 @hellas.on(events.NewMessage(outgoing=True, pattern=r"^\. ذكاء ([\s\S]*)"))
 async def ai_handler(event):
-    # جلب النص اللي كتبته بعد كلمة ذكاء
     user_text = event.pattern_match.group(1)
     
-    # رسالة مؤقتة بين ما يجي الرد
-    await event.edit("**🔍 جاري التفكير...**")
+    await event.edit("**🔍 جاري الاتصال بخوادم الذكاء الاصطناعي...**")
     
-    # الرابط اللي طلبته مع النص
-    api_url = f"https://sonnet3-5.free.nf/api/reasoning.php?text={user_text}"
+    # تحويل النص العربي إلى صيغة تفهمها الروابط (URL Encoding)
+    query = urllib.parse.quote(user_text)
+    api_url = f"https://sonnet3-5.free.nf/api/reasoning.php?text={query}"
+    
+    # إضافة Headers ليوهم الموقع أننا متصفح حقيقي (يمنع الـ Disconnect)
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json"
+    }
     
     try:
-        # طلب النتيجة من الموقع
-        response = requests.get(api_url)
+        # إرسال الطلب مع مهلة زمنية (Timeout)
+        response = requests.get(api_url, headers=headers, timeout=20)
         
         if response.status_code == 200:
-            data = response.json()
+            # محاولة قراءة الرد كـ JSON، وإذا فشل نقرأه كنص عادي
+            try:
+                data = response.json()
+                result = data.get("response", "لم أجد حقل 'response' في الرد.")
+            except:
+                result = response.text
             
-            # سحب النتيجة من حقل response
-            # ملاحظة: إذا كان الرد نص مباشر نستخدم response.text 
-            # هنا افترضت أن الرد JSON وفيه حقل اسمه response
-            result = data.get("response", "لم يتم العثور على رد.")
+            # إرسال النتيجة (تقسيمها إذا كانت طويلة جداً)
+            if len(result) > 4090:
+                result = result[:4090] + "..."
             
-            # إرسال النتيجة النهائية
-            await event.edit(f"**الـرد:**\n\n{result}")
+            await event.edit(f"**💡 النتيجة:**\n\n{result}")
         else:
-            await event.edit("**❌ حدث خطأ في الاتصال بالموقع.**")
+            await event.edit(f"**❌ الموقع رد بخطأ رقم: {response.status_code}**")
             
+    except requests.exceptions.Timeout:
+        await event.edit("**⏳ انتهى وقت الانتظار، الموقع بطيء جداً حالياً.**")
     except Exception as e:
-        # إذا واجهنا مشكلة بالكود أو الموقع
         await event.edit(f"**❌ فشل جلب البيانات:**\n`{e}`")
-
