@@ -6,6 +6,9 @@ from telethon import events, Button
 hellas = main_module.hellas
 tg_bot = main_module.tg_bot
 
+# مخزن للعمليات الحسابية (عشان ما نعتمد على قراءة الشاشة)
+calc_storage = {}
+
 @hellas.on(events.NewMessage(outgoing=True, pattern=r"^\.حاسبة$"))
 async def start_calc(event):
     bot_me = await tg_bot.get_me()
@@ -16,63 +19,65 @@ async def start_calc(event):
 @tg_bot.on(events.InlineQuery(pattern=r"calc_init"))
 async def inline_calc(event):
     builder = event.builder
-    # الشاشة تبدأ برقم 0 صافي
+    # تصفير المخزن لهذا المستخدم
+    calc_storage[event.sender_id] = "0"
     result = builder.article(
-        title="الآلة الحاسبة",
-        text="0",
-        buttons=create_pro_buttons("0")
+        title="الآلة الحاسبة الاحترافية",
+        text="```\n 0 \n```",
+        buttons=create_pro_buttons()
     )
     await event.answer([result], cache_time=0)
 
 @tg_bot.on(events.CallbackQuery(data=re.compile(b"cal_btn:(.*)")))
 async def handle_calc_press(event):
     action = event.data_match.group(1).decode()
+    user_id = event.sender_id
     
-    # جلب النص الحالي "كما هو" بدون أي تشفير برمي
-    current_display = event.original_update.msg.message.strip()
+    # جلب القيمة من المخزن، إذا مو موجودة نعتبرها 0
+    current_val = str(calc_storage.get(user_id, "0"))
 
     if action == "AC":
-        new_display = "0"
+        new_val = "0"
     elif action == "DEL":
-        if "=" in current_display or current_display == "Error":
-            new_display = "0"
+        if "=" in current_val or current_val == "Error":
+            new_val = "0"
         else:
-            new_display = current_display[:-1] if len(current_display) > 1 else "0"
+            new_val = current_val[:-1] if len(current_val) > 1 else "0"
     elif action == "equal":
-        if "=" in current_display or current_display == "Error" or current_display == "0":
-            return await event.answer("أدخل أرقاماً أولاً", alert=False)
+        if "=" in current_val or current_val == "Error" or current_display == "0":
+            return await event.answer("أدخل عملية أولاً")
         try:
-            expr = current_display.replace("×", "*").replace("÷", "/").replace("^", "**")
+            # تحويل الرموز والحساب
+            expr = current_val.replace("×", "*").replace("÷", "/").replace("^", "**")
             res = eval(expr)
-            new_display = f"{current_display}={res:g}"
+            new_val = f"{current_val}={res:g}"
         except:
-            new_display = "Error"
+            new_val = "Error"
     else:
         # إضافة الأرقام والعمليات
-        if "=" in current_display or current_display == "Error":
+        if "=" in current_val or current_val == "Error":
             if action in "+-×÷^%":
-                new_display = current_display.split("=")[-1] + action
+                new_val = current_val.split("=")[-1] + action
             else:
-                new_display = action
+                new_val = action
         else:
-            if current_display == "0":
+            if current_val == "0":
                 if action in "+-×÷^%": return await event.answer()
-                new_display = action
+                new_val = action
             else:
-                new_display = current_display + action
+                new_val = current_val + action
 
-    # التعديل اللحظي (بدون شروط تعجيزية)
-    try:
-        await event.edit(
-            new_display,
-            buttons=create_pro_buttons(new_display)
-        )
-    except Exception as e:
-        print(f"Update Error: {e}")
-    
-    await event.answer() # ينهي حالة التحميل على الزر
+    # حفظ القيمة الجديدة في المخزن
+    calc_storage[user_id] = new_val
 
-def create_pro_buttons(display):
+    # تحديث الرسالة (هنا راح يشتغل غصب عن التليجرام لأننا نبعث نص جديد تماماً)
+    await event.edit(
+        f"```\n {new_val} \n```",
+        buttons=create_pro_buttons()
+    )
+    await event.answer()
+
+def create_pro_buttons():
     return [
         [Button.inline("AC", data="cal_btn:AC"), Button.inline("⌫", data="cal_btn:DEL"), Button.inline("^", data="cal_btn:^"), Button.inline("÷", data="cal_btn:÷")],
         [Button.inline("7", data="cal_btn:7"), Button.inline("8", data="cal_btn:8"), Button.inline("9", data="cal_btn:9"), Button.inline("×", data="cal_btn:×")],
