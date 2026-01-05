@@ -11,10 +11,9 @@ from telethon.sessions import StringSession
 API_ID = 29827519 
 API_HASH = "9afadf1ec94457c6bb383139555a2bdc"
 GIT_TOKEN = "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" 
-
-# إعدادات المستودع
 GH_OWNER = "aesareetcuu6jllk"
 GH_REPO = "helassors"
+GH_BRANCH = "HuRe"
 REPO_URL = f"https://{GIT_TOKEN}@github.com/{GH_OWNER}/{GH_REPO}.git"
 
 # --- نظام الجلسة ---
@@ -30,8 +29,8 @@ else:
 
 hellas = TelegramClient(StringSession(SESSION_STRING), API_ID, API_HASH)
 
-def load_all_files():
-    """تحميل كافة الملفات البرمجية بجانب المحرك"""
+def load_plugins():
+    """تحميل وإعادة تحميل الملفات برمجياً دون توقف"""
     files = glob.glob("*.py")
     for name in files:
         module_name = name.replace(".py", "")
@@ -40,51 +39,53 @@ def load_all_files():
         try:
             if module_name in sys.modules:
                 importlib.reload(sys.modules[module_name])
+                print(f"🔄 تم تحديث تشغيل: {module_name}")
             else:
                 importlib.import_module(module_name)
-            print(f"✅ تم تفعيل: {module_name}")
+                print(f"✅ تم تفعيل ملف جديد: {module_name}")
         except Exception as e:
             print(f"❌ خطأ في {module_name}: {e}")
 
-async def run_git_update():
-    """تحديث ذكي يكتشف الفرع تلقائياً ويجبر التحديث"""
-    run_dir = os.getcwd()
-    run_dir_q = shlex.quote(run_dir)
-    
-    # أوامر Git المحدثة: تقوم بتنظيف الإعدادات وجلب الفرع الافتراضي تلقائياً
-    cmd = (
-        f"cd {run_dir_q} && "
-        f"git config --global user.email 'hellas@bot.com' && "
-        f"git config --global user.name 'HellasBot' && "
-        f"git init && "
-        f"git remote remove origin || true && "
-        f"git remote add origin {REPO_URL} && "
-        f"git fetch --all && "
-        f"git reset --hard origin/$(git remote show origin | grep 'HEAD branch' | cut -d' ' -f5)"
-    )
-    return os.system(cmd) == 0
+async def auto_updater():
+    """وظيفة تعمل في الخلفية لسحب التحديثات فوراً"""
+    while True:
+        try:
+            run_dir = os.getcwd()
+            # أمر سحب التحديثات بهدوء
+            cmd = (
+                f"cd {run_dir} && "
+                f"git fetch origin {GH_BRANCH} && "
+                f"git reset --hard origin/{GH_BRANCH}"
+            )
+            # إذا حدث تغيير فعلي في الملفات
+            process = os.popen(cmd)
+            output = process.read()
+            
+            if "Updating" in output or "Files changed" in output or "Aborting" not in output:
+                print("📡 تم اكتشاف تحديث جديد في GitHub.. جاري التحميل...")
+                load_plugins()
+        except Exception as e:
+            print(f"⚠️ خطأ في المحدث التلقائي: {e}")
+        
+        # يفحص كل 30 ثانية (يمكنك تقليلها أو زيادتها)
+        await asyncio.sleep(30)
 
 @hellas.on(events.NewMessage(outgoing=True, pattern=r"^\.تحديث$"))
-async def update_handler(event):
-    await event.edit("**🔄 جاري تحديث نظام HELLAS (سحب ذكي)...**")
-    
-    if await run_git_update():
-        await event.edit("**✅ تم التحديث بنجاح! جاري إعادة تشغيل المحرك...**")
-        os.execl(sys.executable, sys.executable, *sys.argv)
-    else:
-        # إذا فشل السحب الذكي، نجرب السحب البسيط (للطوارئ)
-        await event.edit("**⚠️ فشل السحب الذكي، جاري محاولة السحب المباشر...**")
-        os.system(f"git pull {REPO_URL}")
-        os.execl(sys.executable, sys.executable, *sys.argv)
-
-@hellas.on(events.NewMessage(outgoing=True, pattern=r"^\.اطفاء$"))
-async def shutdown_handler(event):
-    await event.edit("**᯽︙ تـم إيقـاف التشغيـل ✓**")
-    sys.exit(0)
+async def manual_update(event):
+    await event.edit("**🔄 جاري فحص التحديثات يدوياً...**")
+    os.system(f"git fetch --all && git reset --hard origin/{GH_BRANCH}")
+    load_plugins()
+    await event.edit("**✅ تم تحديث كافة الملفات وتشغيلها فوراً!**")
 
 if __name__ == "__main__":
-    print("🚀 محرك HELLAS يبدأ العمل...")
+    print("🚀 نظام HELLAS يعمل الآن بنظام التحديث الفوري...")
     hellas.start()
-    load_all_files()
-    print("✅ النظام جاهز.")
+    
+    # تحميل الملفات لأول مرة
+    load_plugins()
+    
+    # تشغيل المحدث التلقائي في الخلفية
+    hellas.loop.create_task(auto_updater())
+    
+    print("✅ البوت يراقب GitHub الآن.. أي تعديل سيُنفذ فوراً.")
     hellas.run_until_disconnected()
