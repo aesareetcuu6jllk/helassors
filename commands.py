@@ -1,26 +1,48 @@
-import __main__ as main_module # استيراد الملف الرئيسي
+import __main__ as main_module
 from telethon import events, Button
 
-# ربط المحركين
-hellas = main_module.hellas # الحساب
-tg_bot = main_module.tg_bot # البوت المساعد
+# ربط المحركين من الملف الرئيسي
+hellas = main_module.hellas
+tg_bot = main_module.tg_bot
 
-# أمر يكتبه الحساب لإظهار الأزرار
-@hellas.on(events.NewMessage(outgoing=True, pattern=r"^\.الأوامر$"))
+# 1. أمر اليوزر بوت (عندما تكتب .اوامري)
+@hellas.on(events.NewMessage(outgoing=True, pattern=r"^\.اوامري$"))
 async def my_menu(event):
-    # إنشاء الأزرار
-    buttons = [
-        [Button.inline("قسم الإدارة", data="admin"), Button.inline("قسم الحماية", data="security")],
-        [Button.url("قناة السورس", "https://t.me/HELLASUserBot")]
-    ]
-    # البوت يرسل الرسالة نيابة عن الحساب لتظهر الأزرار
     bot_me = await tg_bot.get_me()
-    results = await hellas.inline_query(bot_me.username, "menu")
-    await results[0].click(event.chat_id)
-    await event.delete()
+    try:
+        # إرسال طلب انلاين للبوت بكلمة "start"
+        results = await hellas.inline_query(bot_me.username, "start")
+        await results[0].click(event.chat_id)
+        await event.delete()
+    except Exception as e:
+        await event.edit(f"**❌ خطأ في استجابة البوت:**\n`{e}`")
 
-# معالج ضغطات الأزرار
+# 2. معالج الانلاين (داخل البوت المساعد) - هذا اللي يحل مشكلة الـ Timeout
+@tg_bot.on(events.InlineQuery(pattern=r"start"))
+async def inline_handler(event):
+    builder = event.builder
+    # تصميم الأزرار
+    buttons = [
+        [Button.inline("🔐 الأوامر", data="cmds"), Button.inline("⚙️ الإعدادات", data="sett")],
+        [Button.url("📢 قناة السورس", "https://t.me/HELLASUserBot")]
+    ]
+    # الرد الفوري لمنع الـ Timeout
+    result = builder.article(
+        title="HELLAS MENU",
+        text="**♰ هـذه هي قائمة اوامـر سـورس 𝐇𝐞𝐥𝐥𝐚𝐬 ♰**",
+        buttons=buttons
+    )
+    await event.answer([result])
+
+# 3. معالج ضغطات الأزرار
 @tg_bot.on(events.CallbackQuery)
 async def callback(event):
-    if event.data == b"admin":
-        await event.edit("**🔐 أوامر الإدارة:**\n- `.طرد`\n- `.حظر`")
+    if event.data == b"cmds":
+        await event.edit("**📚 قائمة الأوامر قيد التطوير...**", buttons=[Button.inline("⬅️ رجوع", data="back")])
+    elif event.data == b"back":
+        # إعادة القائمة الرئيسية
+        buttons = [
+            [Button.inline("🔐 الأوامر", data="cmds"), Button.inline("⚙️ الإعدادات", data="sett")],
+            [Button.url("📢 قناة السورس", "https://t.me/HELLASUserBot")]
+        ]
+        await event.edit("**♰ هـذه هي قائمة اوامـر سـورس 𝐇𝐞لّا𝐬 ♰**", buttons=buttons)
