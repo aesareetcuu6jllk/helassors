@@ -2,18 +2,19 @@ import __main__ as main_module
 import re
 from telethon import events, Button
 
-# ربط المحركات
+# ربط المحركات من الملف الرئيسي
 hellas = main_module.hellas
 tg_bot = main_module.tg_bot
 
-# أيقونات احترافية للتصميم
-HEADER = "✨ **𝐇𝐄𝐋𝐋𝐀𝐒 𝐂𝐀𝐋𝐂𝐔𝐋𝐀𝐓𝐎𝐑** ✨"
-DISPLAY_FORMAT = "```\n[ {} ]\n```"
+# تصميم الواجهة
+HEADER = "✨ **𝐇𝐄𝐋𝐋𝐀𝐒 𝐏𝐑𝐎 𝐂𝐀𝐋𝐂** ✨"
+# استخدام النمط البرمجي لجعل الشاشة شفافة واحترافية
+DISPLAY_FORMAT = "```\n┌──────────────────┐\n  {} \n└──────────────────┘\n```"
 
 @hellas.on(events.NewMessage(outgoing=True, pattern=r"^\.حاسبة$"))
 async def start_calc(event):
     bot_me = await tg_bot.get_me()
-    # استخدام نظام الانلاين كيري لبدء الحاسبة
+    # تشغيل نظام الإنلاين لبدء الجلسة
     results = await hellas.inline_query(bot_me.username, "calc_init")
     await results[0].click(event.chat_id)
     await event.delete()
@@ -21,10 +22,9 @@ async def start_calc(event):
 @tg_bot.on(events.InlineQuery(pattern=r"calc_init"))
 async def inline_calc(event):
     builder = event.builder
-    # واجهة التشغيل الأولى
     result = builder.article(
-        title="شغل الحاسبة الاحترافية",
-        text=f"{HEADER}\n\n{DISPLAY_FORMAT.format('0')}",
+        title="الآلة الحاسبة الاحترافية",
+        text=f"{HEADER}\n{DISPLAY_FORMAT.format('0')}",
         buttons=create_pro_buttons("0")
     )
     await event.answer([result])
@@ -32,42 +32,53 @@ async def inline_calc(event):
 @tg_bot.on(events.CallbackQuery(data=re.compile(b"cal_btn:(.*)")))
 async def handle_calc_press(event):
     action = event.data_match.group(1).decode()
-    # جلب النص الحالي من الشاشة بين الأقواس [ ]
-    current_display = re.search(r"\[ (.*) \]", event.original_update.msg.message).group(1)
+    
+    # استخراج النص الحالي من الشاشة (بين الخطوط)
+    # نستخدم regex للبحث عن المحتوى داخل صندوق العرض
+    try:
+        current_display = re.search(r"  (.*) \n", event.original_update.msg.message).group(1).strip()
+    except:
+        current_display = "0"
 
     if action == "AC":
         new_display = "0"
     elif action == "DEL":
+        # مسح آخر رمز
         new_display = current_display[:-1] if len(current_display) > 1 else "0"
     elif action == "equal":
         try:
-            # معالجة الرموز للغة البايثون
-            safe_expr = current_display.replace("×", "*").replace("÷", "/").replace("^", "**").replace("%", "/100")
-            new_display = str(eval(safe_expr))
-            # تقريب النتائج الطويلة جداً
-            if "." in new_display and len(new_display) > 10:
-                new_display = str(round(float(new_display), 5))
+            # تحويل الرموز لعمليات رياضية يفهمها البايثون
+            expression = current_display.replace("×", "*").replace("÷", "/").replace("^", "**")
+            # حساب النتيجة
+            res = eval(expression)
+            # تنسيق النتيجة (تقريب إذا كانت فواصل طويلة)
+            new_display = str(round(res, 5)) if isinstance(res, float) else str(res)
         except:
             new_display = "Error"
     else:
+        # إذا كانت الشاشة صفر أو خطأ، نبدأ بكتابة الرقم الجديد
         if current_display in ["0", "Error"]:
-            new_display = action
+            # منع تكرار العمليات في البداية
+            if action in ["+", "×", "÷", "^", "%"]:
+                new_display = "0"
+            else:
+                new_display = action
         else:
+            # إضافة الرقم أو العملية بجانب النص الحالي فوراً
             new_display = current_display + action
 
-    # تحديث الواجهة فقط إذا تغير النص لمنع الـ Flood
+    # التحديث اللحظي: نعدل الرسالة فقط إذا تغير المحتوى
     if new_display != current_display:
-        try:
-            await event.edit(
-                f"{HEADER}\n\n{DISPLAY_FORMAT.format(new_display)}",
-                buttons=create_pro_buttons(new_display)
-            )
-        except: pass
+        await event.edit(
+            f"{HEADER}\n{DISPLAY_FORMAT.format(new_display)}",
+            buttons=create_pro_buttons(new_display)
+        )
     
+    # إخبار التليجرام أن الكولباك تم بنجاح لمنع ظهور علامة التحميل على الزر
     await event.answer()
 
 def create_pro_buttons(display):
-    """توزيع أزرار احترافي وشفاف"""
+    """توزيع الأزرار بشكل شفاف ومنظم"""
     return [
         [Button.inline("AC", data="cal_btn:AC"), Button.inline("⌫", data="cal_btn:DEL"), Button.inline("^", data="cal_btn:^"), Button.inline("÷", data="cal_btn:÷")],
         [Button.inline("7", data="cal_btn:7"), Button.inline("8", data="cal_btn:8"), Button.inline("9", data="cal_btn:9"), Button.inline("×", data="cal_btn:×")],
