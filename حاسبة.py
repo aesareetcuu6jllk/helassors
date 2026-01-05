@@ -6,7 +6,7 @@ from telethon import events, Button
 hellas = main_module.hellas
 tg_bot = main_module.tg_bot
 
-# واجهة نظيفة جداً (فقط الشاشة)
+# شاشة نظيفة جداً
 DISPLAY_FORMAT = "```\n {} \n```"
 
 @hellas.on(events.NewMessage(outgoing=True, pattern=r"^\.حاسبة$"))
@@ -30,44 +30,47 @@ async def inline_calc(event):
 async def handle_calc_press(event):
     action = event.data_match.group(1).decode()
     
-    # استخراج النص الحالي من داخل الصندوق البرمجي
-    try:
-        current_display = re.search(r"\n (.*) \n", event.original_update.msg.message).group(1).strip()
-    except:
-        current_display = "0"
+    # الطريقة الأضمن لجلب النص الحالي بدون أخطاء regex
+    raw_text = event.original_update.msg.message
+    current_display = raw_text.strip().replace('```', '').strip()
 
     if action == "AC":
         new_display = "0"
     elif action == "DEL":
-        new_display = current_display[:-1] if len(current_display) > 1 else "0"
+        if "=" in current_display: # إذا كانت نتيجة، المسح يصفر الشاشة
+            new_display = "0"
+        else:
+            new_display = current_display[:-1] if len(current_display) > 1 else "0"
     elif action == "equal":
-        # إذا كانت النتيجة ظاهرة مسبقاً لا نفعل شيئاً
-        if "=" in current_display:
+        if "=" in current_display or current_display == "Error":
             new_display = current_display
         else:
             try:
-                # تحويل الرموز وحساب النتيجة
+                # استبدال الرموز ليفهمها المحرك الرياضي
                 expr = current_display.replace("×", "*").replace("÷", "/").replace("^", "**")
                 res = eval(expr)
+                # تنسيق النتيجة بشكل جميل (بدون أصفار زائدة)
                 formatted_res = f"{res:g}"
-                # عرض العملية كاملة مع النتيجة مثل: 5+5=10
                 new_display = f"{current_display}={formatted_res}"
             except:
                 new_display = "Error"
     else:
-        # إذا كانت الشاشة تظهر نتيجة سابقة وبدأت تكتب رقم جديد، نصفر الشاشة
+        # إذا كنت كاتب عملية وانتهت بالنتيجة (مثل 5+5=10) وضغطت رقم جديد، يبدأ سطر جديد
         if "=" in current_display or current_display == "Error":
-            if action in "+-×÷^%": # إذا ضغطت عملية، يكمل على النتيجة السابقة
+            if action in "+-×÷^%": # يكمل على النتيجة السابقة
                 new_display = current_display.split("=")[-1] + action
-            else: # إذا ضغطت رقم، يبدأ من جديد
+            else: # يبدأ عملية جديدة تماماً
                 new_display = action
         else:
             if current_display == "0":
-                new_display = action if action not in "+×÷^%" else "0"
+                if action in "+-×÷^%": 
+                    new_display = "0" # لا يبدأ بعملية حسابية
+                else:
+                    new_display = action
             else:
                 new_display = current_display + action
 
-    # التحديث الفوري
+    # التعديل اللحظي (السرعة القصوى)
     if new_display != current_display:
         await event.edit(
             DISPLAY_FORMAT.format(new_display),
