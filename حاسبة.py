@@ -6,8 +6,9 @@ from telethon import events, Button
 hellas = main_module.hellas
 tg_bot = main_module.tg_bot
 
-# شاشة نظيفة جداً
-DISPLAY_FORMAT = "```\n {} \n```"
+# واجهة نظيفة (بدون تعقيدات برمجية تبطئ التحديث)
+def format_screen(text):
+    return f"```\n{text}\n```"
 
 @hellas.on(events.NewMessage(outgoing=True, pattern=r"^\.حاسبة$"))
 async def start_calc(event):
@@ -20,8 +21,8 @@ async def start_calc(event):
 async def inline_calc(event):
     builder = event.builder
     result = builder.article(
-        title="الآلة الحاسبة السريعة",
-        text=DISPLAY_FORMAT.format('0'),
+        title="الآلة الحاسبة الاحترافية",
+        text=format_screen("0"),
         buttons=create_pro_buttons("0")
     )
     await event.answer([result], cache_time=0)
@@ -30,56 +31,61 @@ async def inline_calc(event):
 async def handle_calc_press(event):
     action = event.data_match.group(1).decode()
     
-    # الطريقة الأضمن لجلب النص الحالي بدون أخطاء regex
+    # جلب النص الحالي وتنظيفه من كل رموز التليجرام الزائدة
     raw_text = event.original_update.msg.message
-    current_display = raw_text.strip().replace('```', '').strip()
+    current_display = raw_text.replace('`', '').strip()
 
     if action == "AC":
         new_display = "0"
     elif action == "DEL":
-        if "=" in current_display: # إذا كانت نتيجة، المسح يصفر الشاشة
+        if "=" in current_display or current_display == "Error":
             new_display = "0"
         else:
             new_display = current_display[:-1] if len(current_display) > 1 else "0"
     elif action == "equal":
-        if "=" in current_display or current_display == "Error":
+        if "=" in current_display or current_display == "Error" or current_display == "0":
             new_display = current_display
         else:
             try:
-                # استبدال الرموز ليفهمها المحرك الرياضي
+                # استبدال الرموز للحساب
                 expr = current_display.replace("×", "*").replace("÷", "/").replace("^", "**")
                 res = eval(expr)
-                # تنسيق النتيجة بشكل جميل (بدون أصفار زائدة)
+                # تنسيق النتيجة
                 formatted_res = f"{res:g}"
                 new_display = f"{current_display}={formatted_res}"
-            except:
+            except Exception:
                 new_display = "Error"
     else:
-        # إذا كنت كاتب عملية وانتهت بالنتيجة (مثل 5+5=10) وضغطت رقم جديد، يبدأ سطر جديد
+        # معالجة إضافة الأرقام والعمليات
         if "=" in current_display or current_display == "Error":
-            if action in "+-×÷^%": # يكمل على النتيجة السابقة
+            if action in "+-×÷^%":
                 new_display = current_display.split("=")[-1] + action
-            else: # يبدأ عملية جديدة تماماً
+            else:
                 new_display = action
         else:
             if current_display == "0":
-                if action in "+-×÷^%": 
-                    new_display = "0" # لا يبدأ بعملية حسابية
+                if action in "+-×÷^%":
+                    new_display = "0"
                 else:
                     new_display = action
             else:
                 new_display = current_display + action
 
-    # التعديل اللحظي (السرعة القصوى)
-    if new_display != current_display:
+    # التحديث (تم إزالة شرط المطابقة لضمان الإرسال في حال وجود رموز مخفية)
+    try:
         await event.edit(
-            DISPLAY_FORMAT.format(new_display),
+            format_screen(new_display),
             buttons=create_pro_buttons(new_display)
         )
+    except Exception:
+        # في حال كان التليجرام يرفض التعديل لنفس النص
+        pass
     
+    # إنهاء تأثير التحميل على الزر فوراً
     await event.answer()
 
 def create_pro_buttons(display):
+    # استخدام أزرار شفافة ومنظمة
     return [
         [Button.inline("AC", data="cal_btn:AC"), Button.inline("⌫", data="cal_btn:DEL"), Button.inline("^", data="cal_btn:^"), Button.inline("÷", data="cal_btn:÷")],
         [Button.inline("7", data="cal_btn:7"), Button.inline("8", data="cal_btn:8"), Button.inline("9", data="cal_btn:9"), Button.inline("×", data="cal_btn:×")],
