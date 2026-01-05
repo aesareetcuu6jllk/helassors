@@ -13,7 +13,7 @@ API_HASH = "9afadf1ec94457c6bb383139555a2bdc"
 
 # جلب الإعدادات من البيئة أو القيم الافتراضية (نفس منطق الجوكر)
 GH_OWNER = os.getenv("HELLAS_GH_OWNER", "aesareetcuu6jllk")
-GH_REPO = os.getenv("HELLAS_REPO", "hellassors")
+GH_REPO = os.getenv("HELLAS_REPO", "helassors")
 GH_BRANCH = os.getenv("HELLAS_BRANCH", "HuRe")
 REPO_URL = f"https://github.com/{GH_OWNER}/{GH_REPO}.git"
 
