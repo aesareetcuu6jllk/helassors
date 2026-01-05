@@ -7,56 +7,67 @@ from telethon import events
 hellas = main_module.hellas
 tg_bot = main_module.tg_bot
 
-# استيراد قاعدة البيانات
-try:
-    from JoKeRUB.sql_helper.globals import addgvar, delgvar, gvarstatus
-except:
+# مسار ملف التخزين البديل لضمان عدم النسيان بعد التحديث
+STATUS_FILE = "self_save_status.txt"
+
+def is_enabled():
+    # فحص قاعدة البيانات أولاً، ثم الملف النصي
     try:
-        from sql_helper.globals import addgvar, delgvar, gvarstatus
+        from JoKeRUB.sql_helper.globals import gvarstatus
+        if gvarstatus("save_self_media"): return True
     except:
-        def addgvar(k, v): globals()[k] = v
-        def delgvar(k): globals().pop(k, None)
-        def gvarstatus(k): return globals().get(k)
+        pass
+    return os.path.exists(STATUS_FILE)
 
 # --- تفعيل وتعطيل ---
 @hellas.on(events.NewMessage(outgoing=True, pattern=r"^\.(الذاتية تشغيل|ذاتية تشغيل)$"))
 async def turn_on(event):
-    addgvar("save_self_media", "true")
-    await event.edit("**᯽︙ تم تفعيل حفظ الذاتيات بنجاح ✓**\n**᯽︙ سأقوم الآن بحفظ أي صورة أو فيديو يصلك بالخاص تلقائياً.**")
+    # حفظ في قاعدة البيانات (للاحتياط)
+    try:
+        from JoKeRUB.sql_helper.globals import addgvar
+        addgvar("save_self_media", "true")
+    except:
+        pass
+    # حفظ في ملف نصي (لضمان البقاء بعد التحديث)
+    with open(STATUS_FILE, "w") as f:
+        f.write("on")
+    
+    await event.edit("**᯽︙ تم تفعيل حفظ الذاتيات بنجاح ✓**\n**᯽︙ سيبقى التفعيل شغالاً حتى بعد التحديث والريستارت.**")
 
 @hellas.on(events.NewMessage(outgoing=True, pattern=r"^\.(الذاتية تعطيل|ذاتية تعطيل)$"))
 async def turn_off(event):
-    delgvar("save_self_media")
+    try:
+        from JoKeRUB.sql_helper.globals import delgvar
+        delgvar("save_self_media")
+    except:
+        pass
+    if os.path.exists(STATUS_FILE):
+        os.remove(STATUS_FILE)
     await event.edit("**᯽︙ تم تعطيل حفظ الذاتيات بنجاح ✓**")
 
-# --- محرك الحفظ التلقائي الصاروخي ---
+# --- محرك الحفظ التلقائي الشامل (ميديا + بصمات) ---
 @hellas.on(events.NewMessage(incoming=True, func=lambda e: e.is_private))
 async def auto_save_handler(event):
-    # التأكد من التفعيل من قاعدة البيانات
-    if gvarstatus("save_self_media"):
-        # التحقق إذا كانت الرسالة تحتوي على ميديا (صورة أو فيديو)
-        if event.photo or event.video or event.media:
+    if is_enabled():
+        # دعم كامل: صور، فيديو، بصمات، ملفات صوتية
+        if event.photo or event.video or event.voice or event.audio or event.media:
             try:
-                # محاولة تحميل الميديا فوراً
                 media = await event.download_media()
                 if media:
                     sender = await event.get_sender()
-                    # جلب الوقت واليوم
+                    m_type = "بصمة صوتية 🎤" if event.voice else "ميديا 🖼"
                     date_str = event.date.strftime("%Y-%m-%d %I:%M %p")
                     
-                    caption = f"**♡ تم حفظ ميديا (ذاتية/عادية) ✓**\n\n**♡ المرسل :** [{sender.first_name}](tg://user?id={event.sender_id})\n**♡ الوقت :** `{date_str}`"
+                    caption = f"**♡ تم حفظ {m_type} ✓**\n**♡ المرسل :** [{sender.first_name}](tg://user?id={event.sender_id})\n**♡ الوقت :** `{date_str}`"
                     
-                    # الإرسال للرسائل المحفوظة
                     await hellas.send_file("me", media, caption=caption)
-                    
-                    # مسح الملف من السيرفر بعد الإرسال
                     if os.path.exists(media):
                         os.remove(media)
             except Exception as e:
-                print(f"Error saving media: {str(e)}")
+                print(f"Save Error: {str(e)}")
 
-# --- الجلب اليدوي بالرد ---
-@hellas.on(events.NewMessage(outgoing=True, pattern=r"^\.(جلب الصورة|جلب الصوره|ذاتيه|ذاتية)$"))
+# --- الجلب اليدوي ---
+@hellas.on(events.NewMessage(outgoing=True, pattern=r"^\.(جلب|ذاتية)$"))
 async def manual_save(event):
     if not event.is_reply:
         return await event.edit("**᯽︙ رد على الميديا أولاً!**")
@@ -67,7 +78,6 @@ async def manual_save(event):
     if media:
         await hellas.send_file("me", media, caption="**᯽︙ تم جلب الميديا بنجاح ✓**")
         await event.delete()
-        if os.path.exists(media):
-            os.remove(media)
+        if os.path.exists(media): os.remove(media)
     else:
-        await event.edit("**᯽︙ فشل الجلب! قد تكون الميديا منتهية.**")
+        await event.edit("**᯽︙ فشل الجلب!**")
