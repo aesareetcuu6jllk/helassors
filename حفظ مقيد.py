@@ -1,6 +1,5 @@
 import __main__ as main_module
 from telethon import events
-from telethon.tl.functions.messages import GetMessagesRequest
 from telethon.tl.types import DocumentAttributeVideo
 import os
 
@@ -13,27 +12,25 @@ async def save_from_link(event):
     await event.edit("**᯽︙ جاري سحب المحتوى من الرابط... 📥**")
 
     try:
-        # تحليل الرابط (قناة خاصة أو عامة)
+        # تحليل الرابط
         if "/c/" in link:
-            # روابط القنوات الخاصة
+            # قناة خاصة
             parts = link.split("/")
             chat_id = int("-100" + parts[-2])
             msg_id = int(parts[-1].split("?")[0])
         else:
-            # روابط القنوات العامة
+            # قناة عامة
             parts = link.split("/")
-            username = parts[-2]
+            chat_id = parts[-2]
             msg_id = int(parts[-1].split("?")[0])
-            entity = await hellas.get_entity(username)
-            chat_id = entity.id
 
-        # تصحيح الطلب لتجنب خطأ الـ Positional Arguments
-        res = await hellas(GetMessagesRequest(peer=chat_id, id=[msg_id]))
+        # استخدام الطريقة المختصرة والأضمن في Telethon
+        messages = await hellas.get_messages(chat_id, ids=msg_id)
         
-        if not res or not res.messages or res.messages[0].id == 0:
-            return await event.edit("**❌ لم يتم العثور على الرسالة أو الرابط غير صحيح.**")
+        if not messages:
+            return await event.edit("**❌ فشل جلب الرسالة، تأكد من وجودك في القناة.**")
         
-        msg = res.messages[0]
+        msg = messages
 
         if msg.media:
             # تحميل الميديا
@@ -60,7 +57,7 @@ async def save_from_link(event):
             # إذا كان نص فقط
             await event.edit(msg.text)
         else:
-            await event.edit("**❌ هذا النوع من الرسائل غير مدعوم.**")
+            await event.edit("**❌ نوع الرسالة غير مدعوم.**")
 
     except Exception as e:
         await event.edit(f"**❌ حدث خطأ أثناء الحفظ:**\n`{str(e)}`")
