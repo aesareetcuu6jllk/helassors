@@ -27,15 +27,16 @@ async def save_from_link(event):
             entity = await hellas.get_entity(username)
             chat_id = entity.id
 
-        # جلب الرسالة المطلوبة
-        res = await hellas(GetMessagesRequest(chat_id, [msg_id]))
-        if not res.messages or res.messages[0].id == 0:
+        # تصحيح الطلب لتجنب خطأ الـ Positional Arguments
+        res = await hellas(GetMessagesRequest(peer=chat_id, id=[msg_id]))
+        
+        if not res or not res.messages or res.messages[0].id == 0:
             return await event.edit("**❌ لم يتم العثور على الرسالة أو الرابط غير صحيح.**")
         
         msg = res.messages[0]
 
         if msg.media:
-            # تحميل الميديا (صورة، فيديو، الخ)
+            # تحميل الميديا
             file_path = await hellas.download_media(msg)
             
             kwargs = {
@@ -43,9 +44,9 @@ async def save_from_link(event):
                 "caption": msg.text or "",
             }
 
-            # دعم تشغيل الفيديو أثناء التحميل (Streaming)
-            if hasattr(msg.media, "document") and msg.media.document:
-                for attr in msg.media.document.attributes:
+            # دعم تشغيل الفيديو أثناء التحميل
+            if hasattr(msg, "document") and msg.document:
+                for attr in msg.document.attributes:
                     if isinstance(attr, DocumentAttributeVideo):
                         kwargs["supports_streaming"] = True
 
@@ -62,4 +63,4 @@ async def save_from_link(event):
             await event.edit("**❌ هذا النوع من الرسائل غير مدعوم.**")
 
     except Exception as e:
-        await event.edit(f"**❌ حدث خطأ أثناء الحفظ:**\n`{str(e)[:150]}`")
+        await event.edit(f"**❌ حدث خطأ أثناء الحفظ:**\n`{str(e)}`")
