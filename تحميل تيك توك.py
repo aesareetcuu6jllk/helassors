@@ -1,15 +1,15 @@
 import __main__ as main_module
 from telethon import events
-import subprocess
+import yt_dlp
 import os
 import tempfile
-import json
 import asyncio
+import json
 
 # ربط محرك السورس
 hellas = main_module.hellas
 
-# دالة التحميل العامة باستخدام yt-dlp
+# دالة التحميل الاحترافية باستخدام المكتبة مباشرة
 async def download_and_send_file(event, url, platform):
     if not url or "http" not in url:
         return await event.edit("**᯽︙ يرجى وضع رابط صحيح أو الرد على رسالة تحتوي رابط!**")
@@ -18,47 +18,43 @@ async def download_and_send_file(event, url, platform):
 
     try:
         with tempfile.TemporaryDirectory() as tmpdir:
-            output_template = os.path.join(tmpdir, '%(title)s.%(ext)s')
+            # إعدادات التحميل
+            ydl_opts = {
+                'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+                'outtmpl': os.path.join(tmpdir, '%(title)s.%(ext)s'),
+                'quiet': True,
+                'no_warnings': True,
+                'nocheckcertificate': True,
+            }
 
-            # جلب معلومات الملف أولاً
-            info_command = ['yt-dlp', '--no-warnings', '--dump-json', url]
-            process = await asyncio.create_subprocess_exec(
-                *info_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-            )
-            stdout, stderr = await process.communicate()
-            
-            if process.returncode != 0:
-                return await event.edit("**❌ فشل جلب معلومات الرابط، تأكد من صحته!**")
+            # تشغيل التحميل في Loop لعدم تعليق السورس
+            def run_dl():
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    info = ydl.extract_info(url, download=True)
+                    return ydl.prepare_filename(info), info.get('title', 'بدون عنوان')
 
-            video_info = json.loads(stdout.decode())
-            title = video_info.get('title', 'بدون عنوان')
+            loop = asyncio.get_event_loop()
+            file_path, title = await loop.run_in_executor(None, run_dl)
 
-            # التحميل
-            await event.edit(f"**᯽︙ جاري سحب الملف: ( {title[:30]}... )**")
-            
-            download_command = [
-                'yt-dlp', '--no-warnings', '-f', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
-                '--output', output_template, url
-            ]
-            
-            proc = await asyncio.create_subprocess_exec(*download_command, cwd=tmpdir)
-            await proc.wait()
+            if not os.path.exists(file_path):
+                return await event.edit("**❌ فشل العثور على الملف بعد التحميل.**")
 
-            # البحث عن الملف المحمل
-            files = [os.path.join(tmpdir, f) for f in os.listdir(tmpdir)]
-            if not files:
-                return await event.edit("**❌ لم يتم العثور على ملفات صالحة للتحميل.**")
-
-            file_path = files[0]
             await event.edit("**᯽︙ جاري الرفع إلى التليجرام... ⬆️**")
 
-            # إرسال الملف (للمحادثة الحالية)
-            caption = f"🎬 **تم التحميل بنجاح!**\n📝 **العنوان:** {title}\n📌 **الموقع:** {platform}\n**•───── HELLAS ─────•**"
+            # إرسال الملف
+            caption = (
+                f"🎬 **تم التحميل بنجاح!**\n"
+                f"📝 **العنوان:** {title}\n"
+                f"📌 **الموقع:** {platform}\n"
+                f"**•───── HELLAS ─────•**"
+            )
+            
             await hellas.send_file(event.chat_id, file_path, caption=caption)
             await event.delete()
             
     except Exception as e:
-        await event.edit(f"**❌ حدث خطأ أثناء العملية:** `{str(e)[:100]}`")
+        error_msg = str(e)[:150]
+        await event.edit(f"**❌ حدث خطأ أثناء العملية:**\n`{error_msg}`")
 
 # --- الأوامر ---
 
@@ -78,12 +74,14 @@ async def dl_help(event):
     )
     await event.edit(help_msg)
 
-# دالة ذكية لجلب الرابط سواء كان بجانب الأمر أو بالرد
 async def get_url(event):
+    # محاولة جلب الرابط من نص الأمر
     link = event.pattern_match.group(1)
+    # إذا لم يوجد، نحاول جلب الرابط من الرسالة المردود عليها
     if not link:
         reply = await event.get_reply_message()
-        if reply: link = reply.text
+        if reply:
+            link = reply.text
     return link.strip() if link else None
 
 @hellas.on(events.NewMessage(outgoing=True, pattern=r"^\.تيكتوك(?:\s|$)([\s\S]*)"))
